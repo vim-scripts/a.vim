@@ -80,6 +80,8 @@ call <SID>AddAlternateExtensionMapping('lpp',"ypp,y,yacc")
 call <SID>AddAlternateExtensionMapping('y',"l,lex,lpp")
 call <SID>AddAlternateExtensionMapping('yacc',"lex,l,lpp")
 call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
+"let g:alternateExtensions_{'aspx.cs'} = "aspx"
+"let g:alternateExtensions_{'aspx'} = "aspx.cs"
 
 " Setup default search path, unless the user has specified
 " a path in their [._]vimrc. 
@@ -92,7 +94,7 @@ endif
 " unless it exists.
 if (!exists('g:alternateNoDefaultAlternate'))
    " by default a.vim will alternate to a file which does not exist
-   let g:alternateNoDefaultAlternate = 1
+   let g:alternateNoDefaultAlternate = 0
 endif
 
 " Function : GetNthItemFromList (PRIVATE)
@@ -307,7 +309,7 @@ endfunction
 " History  : idea from Tom-Erik Duestad
 " Notes    : there is some magic occuring here. The exists() function does not
 "            work well when the curly brace variable has dots in it. And why
-"            should it, dots are no valid in variable names. But the exists
+"            should it, dots are not valid in variable names. But the exists
 "            function is wierd too. Lets say foo_c does exist. Then
 "            exists("foo_c.e.f") will be true...even though the variable does 
 "            not exist. However the curly brace variables do work when the
@@ -347,6 +349,8 @@ function! DetermineExtension(path)
   return extension
 endfunction
 
+"source $HOME/vimscripts/plugin/Decho.vim
+
 " Function : AlternateFile (PUBLIC)
 " Purpose  : Opens a new buffer by looking at the extension of the current
 "            buffer and finding the corresponding file. E.g. foo.c <--> foo.h
@@ -364,15 +368,22 @@ function! AlternateFile(splitWindow, ...)
   let extension   = DetermineExtension(expand("%:p"))
   let baseName    = substitute(expand("%:t"), "\." . extension . '$', "", "")
   let currentPath = expand("%:p:h")
-  let newFullname = ""
+
+"Decho "extension=".extension
+"Decho "baseName=".baseName
+"Decho "currentPath=".currentPath
 
   if (a:0 != 0)
-     let newFullname = baseName . "." . a:1
+     let newFullname = currentPath . "/" .  baseName . "." . a:1
+     call <SID>FindOrCreateBuffer(newFullname, a:splitWindow)
   else
      let allfiles = ""
      if (extension != "")
-        let allfiles1 = EnumerateFilesByExtension("", baseName, extension)
+        let allfiles1 = EnumerateFilesByExtension(currentPath, baseName, extension)
         let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
+
+"Decho "allfiles1=".allfiles1
+"Decho "allfiles2=".allfiles2
 
         if (allfiles1 != "")
            if (allfiles2 != "")
