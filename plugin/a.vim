@@ -256,11 +256,11 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
   if (bufName == "")
      " Buffer did not exist....create it
      if (a:doSplit == "h")
-        execute ":split " . a:filename
+        execute ":split! " . a:filename
      elseif (a:doSplit == "v")
-        execute ":vsplit " . a:filename
+        execute ":vsplit! " . a:filename
      else
-        execute ":e " . a:filename
+        execute ":e! " . a:filename
      endif
   else
      " Buffer was already open......check to see if it is in a window
@@ -268,11 +268,11 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
      if (bufWindow == -1) 
         " Buffer was not in a window so open one
         if (a:doSplit == "h")
-           execute ":sbuffer " . bufName
+           execute ":sbuffer! " . bufName
         elseif (a:doSplit == "v")
            execute ":vert sbuffer " . bufName
         else
-           execute ":buffer " . bufName
+           execute ":buffer! " . bufName
         endif
      else
         " Buffer is already in a window so switch to the window
@@ -280,11 +280,11 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
         if (bufWindow != winnr()) 
            " something wierd happened...open the buffer
            if (a:doSplit == "h")
-              execute ":split " . bufName
+              execute ":split! " . bufName
            elseif (a:doSplit == "v")
-              execute ":vsplit " . bufName
+              execute ":vsplit! " . bufName
            else
-              execute ":e " . bufName
+              execute ":e! " . bufName
            endif
         endif
      endif
