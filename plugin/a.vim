@@ -1,7 +1,3 @@
-" new since 2.0 
-" + fix errors which occured when no alternate file was available, e.g. no
-"   extspec
-
 " Copyright (c) 1998-2001
 " Michael Sharpe <feline@irendi.com>
 "
@@ -30,7 +26,7 @@ if (!exists("g:alternateExtensions"))
    "      the alternate is .c or .cpp or .cxx. Each extension is tried in order
    "      for a match file/buffer. If no match is found the first extension is
    "      used and if necessary the buffer is created.
-   let alternateExtensions = "|h:c,cpp,cxx,cc,CC|H:C,CPP,CXX,CC|hpp:cpp,c|HPP:CPP:C|c:h|C:H|cpp:h,hpp|CPP:H:HPP|cc:h|CC:H|cxx:h|CXX:H|CC:h,H|psl:ph|ph:psl|"
+   let alternateExtensions = "|h:c,cpp,cxx,cc,CC|H:C,CPP,CXX,CC|hpp:cpp,c|HPP:CPP:C|c:h|C:H|cpp:h,hpp|CPP:H:HPP|cc:h|CC:H|cxx:h|CXX:H|CC:h,H|psl:ph|ph:psl|adb:ads|ads:adb|"
 endif
 
 
@@ -103,6 +99,7 @@ func! AlternateFile(splitWindow, ...)
 
      let extSpec = <SID>FindExtensionSpec(extension)
      if (extSpec != "") 
+        let firstFilename = ""
         let foundMatch = 0
         let n = 1
         while (!foundMatch)
@@ -121,7 +118,7 @@ func! AlternateFile(splitWindow, ...)
            endif
            let n = n + 1
         endwhile
-        if (foundMatch == 0) 
+        if (foundMatch == 0 && firstFilename != "") 
            let newFilename = firstFilename
         endif
      endif
