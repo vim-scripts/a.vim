@@ -46,24 +46,24 @@ func! AlternateFile(splitWindow, ...)
      elseif (extension == "h")
         " check to see if a .c file exists
         let newFilename = baseName . ".c"
-        let fileExistsCheck = filereadable(newFilename)
-        if (fileExistsCheck == 0)
+        let existsCheck = BufferOrFileExists(newFilename)
+        if (existsCheck == 0)
            " no .c try for a .cpp
            let newFilename = baseName . ".cpp"
-           let fileExistsCheck = filereadable(newFilename)
-           if (fileExistsCheck == 0)
+           let existsCheck = BufferOrFileExists(newFilename)
+           if (existsCheck == 0)
               " no .c or .cpp try for a .cc
               let newFilename = baseName . ".cc"
-              let fileExistsCheck = filereadable(newFilename)
-              if (fileExistsCheck == 0)
+              let existsCheck = BufferOrFileExists(newFilename)
+              if (existsCheck == 0)
                  " no .c, .cpp or .cc try for a .C
                  let newFilename = baseName . ".C"
-                 let fileExistsCheck = filereadable(newFilename)
-                 if (fileExistsCheck == 0)
+                 let existsCheck = BufferOrFileExists(newFilename)
+                 if (existsCheck == 0)
                     " no .c, .cpp, .cc or .C try for a .cxx
                     let newFilename = baseName . ".cxx"
-                    let fileExistsCheck = filereadable(newFilename)
-                    if (fileExistsCheck == 0)
+                    let existsCheck = BufferOrFileExists(newFilename)
+                    if (existsCheck == 0)
                        " no .c, .cpp, .cc, .C or .cxx exists default to .cpp
                        let newFilename = baseName . ".cpp"
                     endif
@@ -81,6 +81,15 @@ endfunc
 comm! -nargs=? A call AlternateFile(0, <f-args>)
 comm! -nargs=? AS call AlternateFile(1, <f-args>)
 
+
+" Function : BufferOrFileExists (PRIVATE)
+" Purpose  : determines if a buffer or a readable file exists
+" Args     : name (IN) - name of the buffer/file to check
+" Returns  : TRUE if it exists, FALSE otherwise
+function! BufferOrFileExists(name)
+   let result = bufexists(a:name) || filereadable(a:name)
+   return result
+endfunction
 
 " Function : FindOrCreateBuffer (PRIVATE)
 " Purpose  : searches the buffer list (:ls) for the specified filename. If
