@@ -38,6 +38,7 @@ function! <SID>AddAlternateExtensionMapping(extension, alternates)
 endfunction
 
 " Add all the default extensions
+" Mappings for C and C++
 call <SID>AddAlternateExtensionMapping('h',"c,cpp,cxx,cc,CC")
 call <SID>AddAlternateExtensionMapping('H',"C,CPP,CXX,CC")
 call <SID>AddAlternateExtensionMapping('hpp',"cpp,c")
@@ -50,10 +51,20 @@ call <SID>AddAlternateExtensionMapping('cc',"h")
 call <SID>AddAlternateExtensionMapping('CC',"H,h")
 call <SID>AddAlternateExtensionMapping('cxx',"h")
 call <SID>AddAlternateExtensionMapping('CXX',"H")
+" Mappings for PSL7
 call <SID>AddAlternateExtensionMapping('psl',"ph")
 call <SID>AddAlternateExtensionMapping('ph',"psl")
+" Mappings for ADA
 call <SID>AddAlternateExtensionMapping('adb',"ads")
 call <SID>AddAlternateExtensionMapping('ads',"adb")
+" Mappings for lex and yacc files
+call <SID>AddAlternateExtensionMapping('l',"y,yacc,ypp")
+call <SID>AddAlternateExtensionMapping('lex',"yacc,y,ypp")
+call <SID>AddAlternateExtensionMapping('lpp',"ypp,y,yacc")
+call <SID>AddAlternateExtensionMapping('y',"l,lex,lpp")
+call <SID>AddAlternateExtensionMapping('yacc',"lex,l,lpp")
+call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
+
 
 " Function : AddAlternateSearchPath (PRIVATE)
 " Purpose  : simple helper function to add the default search paths
@@ -163,6 +174,77 @@ function! <SID>FindFileInSearchPath(filename, pathList, relPathBase)
    return filepath
 endfunction
 
+" Function : EnumerateFilesByExtension (PRIVATE)
+" Purpose  : enumerates all files by a particular list of alternate extensions.
+" Args     : path -- path of a file (not including the file)
+"            baseName -- base name of the file to be expanded
+"            extension -- extension whose alternates are to be enumerated
+" Returns  : comma separated list of files with extensions
+" Author   : Michael Sharpe <feline@irendi.com>
+function! EnumerateFilesByExtension(path, baseName, extension)
+   let enumeration = ""
+   let extSpec = ""
+   silent! let extSpec = g:alternateExtensions_{a:extension}
+   if (extSpec != "") 
+      let n = 1
+      let done = 0
+      while (!done)
+         let ext = <SID>GetNthItemFromList(extSpec, n)
+         if (ext != "")
+            if (a:path != "")
+               let newFilename = a:path . "/" . a:baseName . "." . ext
+            else
+               let newFilename =  a:baseName . "." . ext
+            endif
+            if (enumeration == "")
+               let enumeration = newFilename
+            else
+               let enumeration = enumeration . "," . newFilename
+            endif
+         else
+            let done = 1
+         endif
+         let n = n + 1
+      endwhile
+   endif
+   return enumeration
+endfunction
+
+" Function : EnumerateFilesByExtensionInPath (PRIVATE)
+" Purpose  : enumerates all files by expanding the path list and the extension
+"            list.
+" Args     : baseName -- base name of the file
+"            extension -- extension whose alternates are to be enumerated
+"            pathList -- the list of paths to enumerate
+"            relPath -- the path of the current file for expansion of relative
+"                       paths in the path list.
+" Returns  : A comma separated list of paths with extensions
+" Author   : Michael Sharpe <feline@irendi.com>
+function! EnumerateFilesByExtensionInPath(baseName, extension, pathList, relPathBase)
+   let enumeration = ""
+   let filepath = ""
+   let m = 1
+   let pathListLen = strlen(a:pathList)
+   if (pathListLen > 0)
+      while (1)
+         let pathSpec = <SID>GetNthItemFromList(a:pathList, m) 
+         if (pathSpec != "")
+            let path = <SID>ExpandAlternatePath(pathSpec, a:relPathBase)
+            let pe = EnumerateFilesByExtension(path, a:baseName, a:extension)
+            if (enumeration == "")
+               let enumeration = pe
+            else
+               let enumeration = enumeration . "," . pe
+            endif
+         else
+            break
+         endif
+         let m = m + 1
+      endwhile
+   endif
+   return enumeration
+endfunction
+
 " Function : AlternateFile (PUBLIC)
 " Purpose  : Opens a new buffer by looking at the extension of the current
 "            buffer and finding the corresponding file. E.g. foo.c <--> foo.h
@@ -174,6 +256,8 @@ endfunction
 "              source file, a search path will be traversed looking for the
 "              alternates.
 "            + Moved some code into a separate function, minor optimization
+"            + rework to favor files in memory based on complete enumeration of
+"              all files extensions and paths
 function! AlternateFile(splitWindow, ...)
   let baseName    = expand("%:t:r") " don't want path or ext
   let extension   = expand("%:t:e")
@@ -183,63 +267,65 @@ function! AlternateFile(splitWindow, ...)
   if (a:0 != 0)
      let newFullname = baseName . "." . a:1
   else
-     let extSpec = ""
-     silent! let extSpec = g:alternateExtensions_{extension}
-     if (extSpec != "") 
-        let firstFullname = ""
-        let foundMatch = 0
-        let n = 1
-        while (!foundMatch)
-           let ext = <SID>GetNthItemFromList(extSpec, n)
-           if (ext != "") 
-              let newFilename = baseName . "." . ext
-              let newFullname = currentPath . "/" . newFilename
-              let foundMatch = <SID>BufferOrFileExists(newFullname)
-              if (!foundMatch) 
-                 if (n == 1)
-                    " save the first for posible later use
-                    let firstFullname = newFullname
-                 endif
+     let allfiles1 = EnumerateFilesByExtension("", baseName, extension)
+     let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
 
-                 " see if we can find the file in the search path
-                 let newFullname = <SID>FindFileInSearchPath(newFilename, g:alternateSearchPath, currentPath)
-                 if (newFullname != "")
-                    let foundMatch = 1
-                 endif
-              endif
-           else
-              break
+     if (allfiles1 != "")
+        let allfiles = allfiles1 . ',' . allfiles2
+     else 
+        let allfiles = allfiles2
+     endif
+
+     if (allfiles != "") 
+        let bestFile = ""
+        let bestScore = 0
+        let score = 0
+        let n = 1
+         
+        let onefile = <SID>GetNthItemFromList(allfiles, n)
+        let bestFile = onefile
+        while (onefile != "" && score < 2)
+           let score = <SID>BufferOrFileExists(onefile)
+           if (score > bestScore)
+              let bestScore = score
+              let bestFile = onefile
            endif
            let n = n + 1
+           let onefile = <SID>GetNthItemFromList(allfiles, n)
         endwhile
-        if (foundMatch == 0 && firstFullname != "") 
-           let newFullname = firstFullname
-        endif
-     endif
-  endif
-  if (newFullname != "")
-     call <SID>FindOrCreateBuffer(newFullname, a:splitWindow)
-  else
-     echo "No alternate file available"
-  endif
-endfunction
 
+        call <SID>FindOrCreateBuffer(bestFile, a:splitWindow)
+     else
+        echo "No alternate file available"
+     endif
+   endif
+endfunction
 
 comm! -nargs=? -bang A call AlternateFile("n<bang>", <f-args>)
 comm! -nargs=? -bang AS call AlternateFile("h<bang>", <f-args>)
 comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
 
-
 " Function : BufferOrFileExists (PRIVATE)
 " Purpose  : determines if a buffer or a readable file exists
 " Args     : fileName (IN) - name of the file to check
-" Returns  : TRUE if it exists, FALSE otherwise
+" Returns  : 2 if it exists in memory, 1 if it exists, 0 otherwise
 " Author   : Michael Sharpe <feline@irendi.com>
 " History  : Updated code to handle buffernames using just the
 "            filename and not the path.
 function! <SID>BufferOrFileExists(fileName)
+   let result = 0
    let bufName = fnamemodify(a:fileName,":t")
-   let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
+   let memBufName = bufname(bufName)
+   if (memBufName != "")
+      let memBufBasename = fnamemodify(memBufName, ":t")
+      if (bufName == memBufBasename)
+         let result = 2
+      endif
+   endif
+
+   if (!result)
+      let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
+   endif
    return result
 endfunction
 
