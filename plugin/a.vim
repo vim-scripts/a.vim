@@ -12,6 +12,11 @@
 " Directory & regex enhancements added by Bindu Wavell who is well known on
 " vim.sf.net
 
+" TODO: a) :AN command "next alternate"
+"       b) Priorities for search paths
+"       c) Error instead of defaulting when alternate does not exist
+"       d) <leader>A on a #include line should go to that header
+
 if exists("loaded_alternateFile")
     finish
 endif
@@ -65,7 +70,6 @@ call <SID>AddAlternateExtensionMapping('lpp',"ypp,y,yacc")
 call <SID>AddAlternateExtensionMapping('y',"l,lex,lpp")
 call <SID>AddAlternateExtensionMapping('yacc',"lex,l,lpp")
 call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
-
 
 " Setup default search path, unless the user has specified
 " a path in their [._]vimrc. 
@@ -271,6 +275,60 @@ function! EnumerateFilesByExtensionInPath(baseName, extension, pathList, relPath
    return enumeration
 endfunction
 
+" Function : DetermineExtension (PRIVATE)
+" Purpose  : Determines the extension of a filename based on the register
+"            alternate extension. This allow extension which contain dots to 
+"            be considered. E.g. foo.aspx.cs to foo.aspx where an alternate
+"            exists for the aspx.cs extension. Note that this will only accept
+"            extensions which contain less than 5 dots. This is only
+"            implemented in this manner for simplicity...it is doubtful that 
+"            this will be a restriction in non-contrived situations.
+" Args     : The path to the file to find the extension in
+" Returns  : The matched extension if any
+" Author   : Michael Sharpe (feline@irendi.com)
+" History  : idea from Tom-Erik Duestad
+" Notes    : there is some magic occuring here. The exists() function does not
+"            work well when the curly brace variable has dots in it. And why
+"            should it, dots are no valid in variable names. But the exists
+"            function is wierd too. Lets say foo_c does exist. Then
+"            exists("foo_c.e.f") will be true...even though the variable does 
+"            not exist. However the curly brace variables do work when the
+"            variable has dots in it. E.g foo_{'c'} is different from 
+"            foo_{'c.d.e'}...and foo_{'c'} is identical to foo_c and
+"            foo_{'c.d.e'} is identical to foo_c.d.e right? Yes in the current
+"            implementation of vim. To trick vim to test for existence of such
+"            variables echo the curly brace variable and look for an error 
+"            message.
+function! DetermineExtension(path) 
+  let extension = expand("%:t:e")
+  let v:errmsg = ""
+  silent! echo g:alternateExtensions_{extension}
+  if (v:errmsg != "")
+     let extension = expand("%:t:e:e")
+     let v:errmsg = ""
+     silent! echo g:alternateExtensions_{extension}
+     if (v:errmsg != "")
+        let extension = expand("%:t:e:e:e")
+        let v:errmsg = ""
+        silent! echo g:alternateExtensions_{extension}
+        if (v:errmsg != "")
+           let extension = expand("%:t:e:e:e:e")
+           let v:errmsg = ""
+           silent! echo g:alternateExtensions_{extension}
+           if (v:errmsg != "")
+              let extension = expand("%:t:e:e:e:e:e")
+              let v:errmsg = ""
+              silent! echo g:alternateExtensions_{extension}
+              if (v:errmsg != "")
+                 let extension = ""
+              endif
+           endif
+        endif
+     endif
+  endif 
+  return extension
+endfunction
+
 " Function : AlternateFile (PUBLIC)
 " Purpose  : Opens a new buffer by looking at the extension of the current
 "            buffer and finding the corresponding file. E.g. foo.c <--> foo.h
@@ -285,27 +343,29 @@ endfunction
 "            + rework to favor files in memory based on complete enumeration of
 "              all files extensions and paths
 function! AlternateFile(splitWindow, ...)
-  let baseName    = expand("%:t:r") " don't want path or ext
-  let extension   = expand("%:t:e")
+  let extension   = DetermineExtension(expand("%:p"))
+  let baseName    = substitute(expand("%:t"), "\." . extension . '$', "", "")
   let currentPath = expand("%:p:h")
   let newFullname = ""
 
   if (a:0 != 0)
      let newFullname = baseName . "." . a:1
   else
-     let allfiles1 = EnumerateFilesByExtension("", baseName, extension)
-     let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
+     let allfiles = ""
+     if (extension != "")
+        let allfiles1 = EnumerateFilesByExtension("", baseName, extension)
+        let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
 
-     if (allfiles1 != "")
-        if (allfiles2 != "")
-           let allfiles = allfiles1 . ',' . allfiles2
-        else
-           let allfiles = allfiles1
+        if (allfiles1 != "")
+           if (allfiles2 != "")
+              let allfiles = allfiles1 . ',' . allfiles2
+           else
+              let allfiles = allfiles1
+           endif
+        else 
+           let allfiles = allfiles2
         endif
-     else 
-        let allfiles = allfiles2
      endif
-
 
      if (allfiles != "") 
         let bestFile = ""
