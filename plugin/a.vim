@@ -16,6 +16,11 @@
 "            extension.
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
+if exists("loaded_alternateFile")
+    finish
+endif
+let loaded_alternateFile = 1
+
 func! AlternateFile(splitWindow, ...)
   let baseName = expand("%<")
   " before 5.6 if (a:1 != "") is needed instead of the following...
