@@ -15,6 +15,11 @@
 " Args     : accepts one argument. If present it used the argument as the new
 "            extension.
 " Returns  : nothing
+" Notes    : this is becoming more complex than I imagined. Will likely rewrite
+"            this soon such that a list of extensions and alternates can be 
+"            registered. This will allow the core function to not have a ton of
+"            tests and allow users to determine thier .cpp vs .cxx vs .cc etc
+"            preferences.
 " Author   : Michael Sharpe <feline@irendi.com>
 if exists("loaded_alternateFile")
     finish
@@ -32,7 +37,14 @@ func! AlternateFile(splitWindow, ...)
      if (extension == "c")
         let newFilename = baseName.".h"
      elseif (extension == "cpp" || extension == "CPP")
-        let newFilename = baseName . ".h"
+        " first try matching with a .hpp file, which is sometimes used with cpp
+        " files. If that fails go with .h which is more common.
+        let newFilename = baseName . ".hpp"
+        let existsCheck = BufferOrFileExists(newFilename)
+        if (existsCheck == 0)
+           " no hpp file about, so use the .h which is more common
+           let newFilename = baseName . ".h"
+        endif
      elseif (extension == "cc" || extension == "CC")
         let newFilename = baseName . ".h"
      elseif (extension == "C")
@@ -43,7 +55,7 @@ func! AlternateFile(splitWindow, ...)
         let newFilename = baseName . ".ph"
      elseif (extension == "ph")
         let newFilename = baseName . ".psl"
-     elseif (extension == "h" || extension == "H")
+     elseif (extension == "h" || extension == "H" || extension == "hpp" || extension == "HPP")
         " check to see if a .c file exists
         let newFilename = baseName . ".c"
         let existsCheck = BufferOrFileExists(newFilename)
