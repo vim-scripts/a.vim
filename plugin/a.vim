@@ -47,7 +47,7 @@ function! <SID>AddAlternateExtensionMapping(extension, alternates)
    " This code handles extensions which contains a dot. exists() fails with
    " such names.
    let v:errmsg = ""
-   silent! echo g:alternateExtensions_{extension}
+   silent! echo g:alternateExtensions_{a:extension}
    if (v:errmsg != "")
       let g:alternateExtensions_{a:extension} = a:alternates
    endif
