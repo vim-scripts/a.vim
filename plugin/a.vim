@@ -9,7 +9,8 @@
 " obligation to maintain or extend this software. It is provided on an
 " "as is" basis without any expressed or implied warranty.
 
-" Directory enhancements added by Bindu Wavell
+" Directory & regex enhancements added by Bindu Wavell who is well known on
+" vim.sf.net
 
 if exists("loaded_alternateFile")
     finish
@@ -66,25 +67,14 @@ call <SID>AddAlternateExtensionMapping('yacc',"lex,l,lpp")
 call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
 
 
-" Function : AddAlternateSearchPath (PRIVATE)
-" Purpose  : simple helper function to add the default search paths
-" Args     : pathSpec -- path to add to search list
-" Returns  : nothing
-" Author   : Bindu Wavell <bindu@wavell.net>
-function! <SID>AddAlternateSearchPath(pathSpec)
-   if (exists("g:alternateSearchPath") && strlen(g:alternateSearchPath) > 0)
-      let g:alternateSearchPath = g:alternateSearchPath . "," . a:pathSpec
-   else
-      let g:alternateSearchPath = a:pathSpec
-   endif
-endfunction
-
-" Add the default file search paths
-call <SID>AddAlternateSearchPath("sfr:../src")
-call <SID>AddAlternateSearchPath("sfr:../include")
+" Setup default search path, unless the user has specified
+" a path in their [._]vimrc. 
+if !exists('g:alternateSearchPath')
+  let g:alternateSearchPath = 'sfr:../source,sfr:../src,sfr:../include,sfr:../inc'
+endif
 
 " Function : GetNthItemFromList (PRIVATE)
-" Purpose  : Suppor reading items from a comma seperated list
+" Purpose  : Support reading items from a comma seperated list
 "            Used to iterate all the extensions in an extension spec
 "            Used to iterate all path prefixes
 " Args     : list -- the list (extension spec, file paths) to iterate
@@ -118,13 +108,35 @@ function! <SID>GetNthItemFromList(list, n)
 endfunction
 
 " Function : ExpandAlternatePath (PRIVATE)
-" Purpose  : Expand path info.  A path with a prefix of "wdr:" will cause 
-"            be treated as relative to the working directory (i.e. the 
+" Purpose  : Expand path info.  A path with a prefix of "wdr:" will be 
+"            treated as relative to the working directory (i.e. the 
 "            directory where vim was started.) A path prefix of "abs:" will 
 "            be treated as absolute. No prefix or "sfr:" will result in the 
 "            path being treated as relative to the source file (see sfPath 
-"            argument).
-" Args     : pathSpec -- path component
+"            argument). 
+"
+"            A prefix of "reg:" will treat the pathSpec as a regular
+"            expression substitution that is applied to the source file 
+"            path. The format is:
+"
+"              reg:<sep><pattern><sep><subst><sep><flag><sep>
+"          
+"            <sep> seperator character, we often use one of [/|%#] 
+"            <pattern> is what you are looking for
+"            <subst> is the output pattern
+"            <flag> can be g for global replace or empty
+"
+"            EXAMPLE: 'reg:/inc/src/g/' will replace every instance 
+"            of 'inc' with 'src' in the source file path. It is possible
+"            to use match variables so you could do something like:
+"            'reg:|src/\([^/]*\)|inc/\1||' (see 'help :substitute', 
+"            'help pattern' and 'help sub-replace-special' for more details
+"
+"            NOTE: a.vim uses ',' (comma) internally so DON'T use it
+"            in your regular expressions or other pathSpecs unless you update 
+"            the rest of the a.vim code to use some other seperator.
+"
+" Args     : pathSpec -- path component (or substitution patterns)
 "            sfPath -- source file path
 " Returns  : a path that can be used by AlternateFile()
 " Author   : Bindu Wavell <bindu@wavell.net>
@@ -132,6 +144,20 @@ function! <SID>ExpandAlternatePath(pathSpec, sfPath)
    let prfx = strpart(a:pathSpec, 0, 4)
    if (prfx == "wdr:" || prfx == "abs:")
       let path = strpart(a:pathSpec, 4)
+   elseif (prfx == "reg:")
+      let re = strpart(a:pathSpec, 4)
+      let sep = strpart(re, 0, 1)
+      let patend = match(re, sep, 1)
+      let pat = strpart(re, 1, patend - 1)
+      let subend = match(re, sep, patend + 1)
+      let sub = strpart(re, patend+1, subend - patend - 1)
+      let flag = strpart(re, strlen(re) - 2)
+      if (flag == sep)
+        let flag = ''
+      endif
+      let path = substitute(a:sfPath, pat, sub, flag)
+      "call confirm('PAT: [' . pat . '] SUB: [' . sub . ']')
+      "call confirm(a:sfPath . ' => ' . path)
    else
       let path = a:pathSpec
       if (prfx == "sfr:")
@@ -271,10 +297,15 @@ function! AlternateFile(splitWindow, ...)
      let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
 
      if (allfiles1 != "")
-        let allfiles = allfiles1 . ',' . allfiles2
+        if (allfiles2 != "")
+           let allfiles = allfiles1 . ',' . allfiles2
+        else
+           let allfiles = allfiles1
+        endif
      else 
         let allfiles = allfiles2
      endif
+
 
      if (allfiles != "") 
         let bestFile = ""
