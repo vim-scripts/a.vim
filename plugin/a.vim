@@ -9,86 +9,119 @@
 " obligation to maintain or extend this software. It is provided on an
 " "as is" basis without any express or implied warranty.
 
+if exists("loaded_alternateFile")
+    finish
+endif
+let loaded_alternateFile = 1
+
+" Allow the list of extensions to be overriden in the .vimrc
+if (!exists("g:alternateExtensions"))
+   " The format of the alternateExtensions variable is as follows. 
+   " alternateExtensions = <EXTENSIONS>
+   " <EXTENSIONS> = | <EXTSPEC> | EXTSPEC| ....
+   " <EXTSPEC> = <EXT> : <ALT1>, <ALT2>,...
+   " <EXT> = the extension to match.
+   " <ALTn> = the alternate extension to swap to.
+   " e.g. h:c,cpp,cxx indicates that if the current file extension is .h, then
+   "      the alternate is .c or .cpp or .cxx. Each extension is tried in order
+   "      for a match file/buffer. If no match is found the first extension is
+   "      used and if necessary the buffer is created.
+   let alternateExtensions = "|h:c,cpp,cxx,cc,CC|H:C,CPP,CXX,CC|hpp:cpp,c|HPP:CPP:C|c:h|C:H|cpp:h,hpp|CPP:H:HPP|cc:h|CC:H|cxx:h|CXX:H|CC:h,H|psl:ph|ph:psl|"
+endif
+
+
+" Function : FindExtensionSpec (PRIVATE)
+" Purpose  : Finds the extension spec corresponding to the specified extension
+" Args     : extension -- the extension to look for
+" Returns  : the extension spec found or "" for failure
+" Author   : Michael Sharpe <feline@irendi.com>
+func! <SID>FindExtensionSpec(extension)
+   let extSpec=""
+   let extMatch = "|".a:extension.":"
+   let startSpec = match(g:alternateExtensions, extMatch, 0)
+   if (startSpec != -1)
+      let endSpec = match(g:alternateExtensions, "|", startSpec + 1)
+      if (endSpec != -1) 
+         let len = endSpec - startSpec - 1
+      else
+         let len = 999
+      endif
+      let extSpec = strpart(g:alternateExtensions, startSpec + 1, len)
+   endif
+   return extSpec
+endfunc
+
+" Function : GetNthExtensionFromSpec (PRIVATE)
+" Purpose  : Use to iterate all the extensions in an extension spec
+" Args     : extSpec -- the extension spec to iterate
+"            n -- the extension to get
+" Returns  : the nth extension from the extension spec, or "" for failure
+" Author   : Michael Sharpe <feline@irendi.com>
+func! <SID>GetNthExtensionFromSpec(extSpec, n) 
+   let extStart = 0
+   let extEnd = match(a:extSpec, ":", 0)
+   let pos = 0
+   let ext = ""
+   let i = 0
+   while (i != a:n)
+      let extStart = extEnd + 1
+      let extEnd = match(a:extSpec, ",", pos)
+      let i = i + 1
+      if (extEnd == -1)
+         if (i == a:n)
+            let extEnd = strlen(a:extSpec)
+         endif
+         break
+      endif
+      let pos = extEnd + 1
+   endwhile 
+   if (extEnd != -1) 
+      let ext = strpart(a:extSpec, extStart, extEnd - extStart)
+   endif
+   return ext 
+endfunc
+
 " Function : AlternateFile (PUBLIC)
 " Purpose  : Opens a new buffer by looking at the extension of the current
 "            buffer and finding the corresponding file. E.g. foo.c <--> foo.h
 " Args     : accepts one argument. If present it used the argument as the new
 "            extension.
 " Returns  : nothing
-" Notes    : this is becoming more complex than I imagined. Will likely rewrite
-"            this soon such that a list of extensions and alternates can be 
-"            registered. This will allow the core function to not have a ton of
-"            tests and allow users to determine thier .cpp vs .cxx vs .cc etc
-"            preferences.
 " Author   : Michael Sharpe <feline@irendi.com>
-if exists("loaded_alternateFile")
-    finish
-endif
-let loaded_alternateFile = 1
-
 func! AlternateFile(splitWindow, ...)
   let baseName = expand("%<")
-  " before 5.6 if (a:1 != "") is needed instead of the following...
   if (a:0 != 0)
      let newFilename = baseName . "." . a:1
   else
      let currentFile = expand("%")
      let extension = fnamemodify(currentFile,":e")
-     if (extension == "c")
-        let newFilename = baseName.".h"
-     elseif (extension == "cpp" || extension == "CPP")
-        " first try matching with a .hpp file, which is sometimes used with cpp
-        " files. If that fails go with .h which is more common.
-        let newFilename = baseName . ".hpp"
-        let existsCheck = BufferOrFileExists(newFilename)
-        if (existsCheck == 0)
-           " no hpp file about, so use the .h which is more common
-           let newFilename = baseName . ".h"
-        endif
-     elseif (extension == "cc" || extension == "CC")
-        let newFilename = baseName . ".h"
-     elseif (extension == "C")
-        let newFilename = baseName . ".h"
-     elseif (extension == "cxx" || extension == "CXX")
-        let newFilename = baseName . ".h"
-     elseif (extension == "psl")
-        let newFilename = baseName . ".ph"
-     elseif (extension == "ph")
-        let newFilename = baseName . ".psl"
-     elseif (extension == "h" || extension == "H" || extension == "hpp" || extension == "HPP")
-        " check to see if a .c file exists
-        let newFilename = baseName . ".c"
-        let existsCheck = BufferOrFileExists(newFilename)
-        if (existsCheck == 0)
-           " no .c try for a .cpp
-           let newFilename = baseName . ".cpp"
-           let existsCheck = BufferOrFileExists(newFilename)
-           if (existsCheck == 0)
-              " no .c or .cpp try for a .cc
-              let newFilename = baseName . ".cc"
-              let existsCheck = BufferOrFileExists(newFilename)
-              if (existsCheck == 0)
-                 " no .c, .cpp or .cc try for a .C
-                 let newFilename = baseName . ".C"
-                 let existsCheck = BufferOrFileExists(newFilename)
-                 if (existsCheck == 0)
-                    " no .c, .cpp, .cc or .C try for a .cxx
-                    let newFilename = baseName . ".cxx"
-                    let existsCheck = BufferOrFileExists(newFilename)
-                    if (existsCheck == 0)
-                       " no .c, .cpp, .cc, .C or .cxx exists default to .cpp
-                       let newFilename = baseName . ".cpp"
-                    endif
-                 endif
+
+     let extSpec = <SID>FindExtensionSpec(extension)
+     if (extSpec != "") 
+        let foundMatch = 0
+        let n = 1
+        while (!foundMatch)
+           let ext = <SID>GetNthExtensionFromSpec(extSpec, n)
+           if (ext != "") 
+              let newFilename = baseName . "." . ext
+              let existsCheck = <SID>BufferOrFileExists(newFilename)
+              if (existsCheck == 1) 
+                 let foundMatch = 1
+              elseif (n == 1)
+                 " save the first for posible later use
+                 let firstFilename = newFilename
               endif
+           else
+              break
            endif
+           let n = n + 1
+        endwhile
+        if (foundMatch == 0) 
+           let newFilename = firstFilename
         endif
-     else
-        echo "AlternameFile: unknown extension"
-        return
      endif
   endif
-  call FindOrCreateBuffer(newFilename, a:splitWindow)
+  call <SID>FindOrCreateBuffer(newFilename, a:splitWindow)
 endfunc
 comm! -nargs=? A call AlternateFile(0, <f-args>)
 comm! -nargs=? AS call AlternateFile(1, <f-args>)
@@ -98,7 +131,8 @@ comm! -nargs=? AS call AlternateFile(1, <f-args>)
 " Purpose  : determines if a buffer or a readable file exists
 " Args     : name (IN) - name of the buffer/file to check
 " Returns  : TRUE if it exists, FALSE otherwise
-function! BufferOrFileExists(name)
+" Author   : Michael Sharpe <feline@irendi.com>
+function! <SID>BufferOrFileExists(name)
    let result = bufexists(a:name) || filereadable(a:name)
    return result
 endfunction
@@ -113,7 +147,7 @@ endfunction
 "            doSplit (IN) -- indicates whether the window should be split
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
-function! FindOrCreateBuffer(filename, doSplit)
+function! <SID>FindOrCreateBuffer(filename, doSplit)
   " Check to see if the buffer is already open before re-opening it.
   let bufName = bufname(a:filename)
   if (bufName == "")
