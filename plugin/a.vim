@@ -1,3 +1,7 @@
+" new since 2.0 
+" + fix errors which occured when no alternate file was available, e.g. no
+"   extspec
+
 " Copyright (c) 1998-2001
 " Michael Sharpe <feline@irendi.com>
 "
@@ -89,6 +93,7 @@ endfunc
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
 func! AlternateFile(splitWindow, ...)
+  let newFilename = ""
   let baseName = expand("%<")
   if (a:0 != 0)
      let newFilename = baseName . "." . a:1
@@ -121,7 +126,11 @@ func! AlternateFile(splitWindow, ...)
         endif
      endif
   endif
-  call <SID>FindOrCreateBuffer(newFilename, a:splitWindow)
+  if (newFilename != "")
+     call <SID>FindOrCreateBuffer(newFilename, a:splitWindow)
+  else
+     echo "No alternate file available"
+  endif
 endfunc
 comm! -nargs=? A call AlternateFile(0, <f-args>)
 comm! -nargs=? AS call AlternateFile(1, <f-args>)
