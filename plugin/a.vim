@@ -15,70 +15,42 @@ endif
 let loaded_alternateFile = 1
 
 " setup the default set of alternate extensions. The user can override in thier
-" .vimrc if the defaults are not suitable.
-if (!exists("g:alternateExtensions_h"))
-   let alternateExtensions_{'h'} = "c,cpp,cxx,cc,CC"
-endif
+" .vimrc if the defaults are not suitable. To override in a .vimrc simply set a
+" g:alternateExtensions_<EXT> variable to a comma separated list of alternates,
+" where <EXT> is the extension to map.
+" E.g. let g:alternateExtensions_CPP = "inc,h,H,HPP,hpp"
 
-if (!exists("g:alternateExtensions_H"))
-   let alternateExtensions_{'H'} = "C,CPP,CXX,CC"
-endif
+" Function : AddAlternateExtensionMapping (PRIVATE)
+" Purpose  : simple helper function to add the default alternate extension
+"            mappings.
+" Args     : extension -- the extension to map
+"            alternates -- comma separated list of alternates extensions
+" Returns  : nothing
+" Author   : Michael Sharpe <feline@irendi.com>
+function! <SID>AddAlternateExtensionMapping(extension, alternates)
+   let varName = "g:alternateExtensions_" . a:extension
+   if (!exists(varName))
+      let g:alternateExtensions_{a:extension} = a:alternates
+   endif
+endfunction
 
-if (!exists("g:alternateExtensions_hpp"))
-   let alternateExtensions_{'hpp'} = "cpp,c"
-endif
-
-if (!exists("g:alternateExtensions_HPP"))
-   let alternateExtensions_{'HPP'} = "CPP,C"
-endif
-
-if (!exists("g:alternateExtensions_c"))
-   let alternateExtensions_{'c'} = "h"
-endif
-
-if (!exists("g:alternateExtensions_C"))
-   let alternateExtensions_{'C'} = "H"
-endif
-
-if (!exists("g:alternateExtensions_cpp"))
-   let alternateExtensions_{'cpp'} = "h,hpp"
-endif
-
-if (!exists("g:alternateExtensions_CPP"))
-   let alternateExtensions_{'CPP'} = "H,HPP"
-endif
-
-if (!exists("g:alternateExtensions_cc"))
-   let alternateExtensions_{'cc'} = "h"
-endif
-
-if (!exists("g:alternateExtensions_CC"))
-   let alternateExtensions_{'CC'} = "H,h"
-endif
-
-if (!exists("g:alternateExtensions_cxx"))
-   let alternateExtensions_{'cxx'} = "h"
-endif
-
-if (!exists("g:alternateExtensions_CXX"))
-   let alternateExtensions_{'CXX'} = "H"
-endif
-
-if (!exists("g:alternateExtensions_psl"))
-   let alternateExtensions_{'psl'} = "ph"
-endif
-
-if (!exists("g:alternateExtensions_ph"))
-   let alternateExtensions_{'ph'} = "psl"
-endif
-
-if (!exists("g:alternateExtensions_adb"))
-   let alternateExtensions_{'adb'} = "ads"
-endif
-
-if (!exists("g:alternateExtensions_ads"))
-   let alternateExtensions_{'ads'} = "adb"
-endif
+" Add all the default extensions
+call <SID>AddAlternateExtensionMapping('h',"c,cpp,cxx,cc,CC")
+call <SID>AddAlternateExtensionMapping('H',"C,CPP,CXX,CC")
+call <SID>AddAlternateExtensionMapping('hpp',"cpp,c")
+call <SID>AddAlternateExtensionMapping('HPP',"CPP,C")
+call <SID>AddAlternateExtensionMapping('c',"h")
+call <SID>AddAlternateExtensionMapping('C',"H")
+call <SID>AddAlternateExtensionMapping('cpp',"h,hpp")
+call <SID>AddAlternateExtensionMapping('CPP',"H,HPP")
+call <SID>AddAlternateExtensionMapping('cc',"h")
+call <SID>AddAlternateExtensionMapping('CC',"H,h")
+call <SID>AddAlternateExtensionMapping('cxx',"h")
+call <SID>AddAlternateExtensionMapping('CXX',"H")
+call <SID>AddAlternateExtensionMapping('psl',"ph")
+call <SID>AddAlternateExtensionMapping('ph',"psl")
+call <SID>AddAlternateExtensionMapping('adb',"ads")
+call <SID>AddAlternateExtensionMapping('ads',"adb")
 
 " Function : GetNthExtensionFromSpec (PRIVATE)
 " Purpose  : Use to iterate all the extensions in an extension spec
