@@ -16,8 +16,6 @@ if exists("loaded_alternateFile")
 endif
 let loaded_alternateFile = 1
 
-source $HOME/vimscripts/plugin/Decho.vim
-
 " setup the default set of alternate extensions. The user can override in thier
 " .vimrc if the defaults are not suitable. To override in a .vimrc simply set a
 " g:alternateExtensions_<EXT> variable to a comma separated list of alternates,
