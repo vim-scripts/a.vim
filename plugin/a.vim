@@ -23,8 +23,6 @@ let loaded_alternateFile = 1
 " E.g. let g:alternateExtensions_CPP = "inc,h,H,HPP,hpp"
 
 
-
-
 " Function : AddAlternateExtensionMapping (PRIVATE)
 " Purpose  : simple helper function to add the default alternate extension
 "            mappings.
@@ -63,8 +61,8 @@ call <SID>AddAlternateExtensionMapping('ads',"adb")
 " Returns  : nothing
 " Author   : Bindu Wavell <bindu@wavell.net>
 function! <SID>AddAlternateSearchPath(pathSpec)
-   if ( exists("g:alternateSearchPath") && strlen(g:alternateSearchPath) > 0 )
-         let g:alternateSearchPath = g:alternateSearchPath . "," . a:pathSpec
+   if (exists("g:alternateSearchPath") && strlen(g:alternateSearchPath) > 0)
+      let g:alternateSearchPath = g:alternateSearchPath . "," . a:pathSpec
    else
       let g:alternateSearchPath = a:pathSpec
    endif
@@ -213,9 +211,9 @@ function! AlternateFile(splitWindow, ...)
   endif
 endfunction
 
-comm! -nargs=? A call AlternateFile("", <f-args>)
-comm! -nargs=? AS call AlternateFile("h", <f-args>)
-comm! -nargs=? AV call AlternateFile("v", <f-args>)
+comm! -nargs=? -bang A call AlternateFile("n<bang>", <f-args>)
+comm! -nargs=? -bang AS call AlternateFile("h<bang>", <f-args>)
+comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
 
 
 " Function : BufferOrFileExists (PRIVATE)
@@ -239,13 +237,15 @@ endfunction
 "            not exist, it creates it.
 " Args     : filename (IN) -- the name of the file
 "            doSplit (IN) -- indicates whether the window should be split
-"                            ("v", "h", "") 
+"                            ("v", "h", "n", "v!", "h!", "n!") 
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
 " History  : bufname() was not working very well with the possibly strange
 "            paths that can abound with the search path so updated this
 "            slightly.  -- Bindu
 "            updated window switching code to make it more efficient -- Bindu
+"            Allow ! to be applied to buffer/split/editing commands for more
+"            vim/vi like consistency
 function! <SID>FindOrCreateBuffer(filename, doSplit)
   " Check to see if the buffer is already open before re-opening it.
   let bufName = bufname(a:filename)
@@ -253,38 +253,53 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
      let bufFilename = fnamemodify(a:filename,":t")
      let bufName = bufname(bufFilename)
   endif
+
+  let splitType = a:doSplit[0]
+  let bang = a:doSplit[1]
   if (bufName == "")
      " Buffer did not exist....create it
-     if (a:doSplit == "h")
-        execute ":split! " . a:filename
-     elseif (a:doSplit == "v")
-        execute ":vsplit! " . a:filename
+     let v:errmsg=""
+     if (splitType == "h")
+        silent! execute ":split".bang." " . a:filename
+     elseif (splitType == "v")
+        silent! execute ":vsplit".bang." " . a:filename
      else
-        execute ":e! " . a:filename
+        silent! execute ":e".bang." " . a:filename
+     endif
+     if (v:errmsg != "")
+        echo v:errmsg
      endif
   else
      " Buffer was already open......check to see if it is in a window
      let bufWindow = bufwinnr(bufName)
      if (bufWindow == -1) 
         " Buffer was not in a window so open one
-        if (a:doSplit == "h")
-           execute ":sbuffer! " . bufName
-        elseif (a:doSplit == "v")
-           execute ":vert sbuffer " . bufName
+        let v:errmsg=""
+        if (splitType == "h")
+           silent! execute ":sbuffer".bang." " . bufName
+        elseif (splitType == "v")
+           silent! execute ":vert sbuffer " . bufName
         else
-           execute ":buffer! " . bufName
+           silent! execute ":buffer".bang." " . bufName
+        endif
+        if (v:errmsg != "")
+           echo v:errmsg
         endif
      else
         " Buffer is already in a window so switch to the window
         execute bufWindow."wincmd w"
         if (bufWindow != winnr()) 
            " something wierd happened...open the buffer
-           if (a:doSplit == "h")
-              execute ":split! " . bufName
-           elseif (a:doSplit == "v")
-              execute ":vsplit! " . bufName
+           let v:errmsg=""
+           if (splitType == "h")
+              silent! execute ":split".bang." " . bufName
+           elseif (splitType == "v")
+              silent! execute ":vsplit".bang." " . bufName
            else
-              execute ":e! " . bufName
+              silent! execute ":e".bang." " . bufName
+           endif
+           if (v:errmsg != "")
+              echo v:errmsg
            endif
         endif
      endif
