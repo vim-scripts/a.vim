@@ -9,6 +9,8 @@
 " obligation to maintain or extend this software. It is provided on an
 " "as is" basis without any expressed or implied warranty.
 
+" Directory enhancements added by Bindu Wavell
+
 if exists("loaded_alternateFile")
     finish
 endif
@@ -19,6 +21,9 @@ let loaded_alternateFile = 1
 " g:alternateExtensions_<EXT> variable to a comma separated list of alternates,
 " where <EXT> is the extension to map.
 " E.g. let g:alternateExtensions_CPP = "inc,h,H,HPP,hpp"
+
+
+
 
 " Function : AddAlternateExtensionMapping (PRIVATE)
 " Purpose  : simple helper function to add the default alternate extension
@@ -52,33 +57,80 @@ call <SID>AddAlternateExtensionMapping('ph',"psl")
 call <SID>AddAlternateExtensionMapping('adb',"ads")
 call <SID>AddAlternateExtensionMapping('ads',"adb")
 
-" Function : GetNthExtensionFromSpec (PRIVATE)
-" Purpose  : Use to iterate all the extensions in an extension spec
-" Args     : extSpec -- the extension spec to iterate
+" Function : AddAlternateSearchPath (PRIVATE)
+" Purpose  : simple helper function to add the default search paths
+" Args     : pathSpec -- path to add to search list
+" Returns  : nothing
+" Author   : Bindu Wavell <bindu@wavell.net>
+function! <SID>AddAlternateSearchPath(pathSpec)
+   if ( exists("g:alternateSearchPath") && strlen(g:alternateSearchPath) > 0 )
+         let g:alternateSearchPath = g:alternateSearchPath . "," . a:pathSpec
+   else
+      let g:alternateSearchPath = a:pathSpec
+   endif
+endfunction
+
+" Add the default file search paths
+call <SID>AddAlternateSearchPath("sfr:../src")
+call <SID>AddAlternateSearchPath("sfr:../include")
+
+" Function : GetNthItemFromList (PRIVATE)
+" Purpose  : Suppor reading items from a comma seperated list
+"            Used to iterate all the extensions in an extension spec
+"            Used to iterate all path prefixes
+" Args     : list -- the list (extension spec, file paths) to iterate
 "            n -- the extension to get
-" Returns  : the nth extension from the extension spec, or "" for failure
+" Returns  : the nth item (extension, path) from the list (extension 
+"            spec), or "" for failure
 " Author   : Michael Sharpe <feline@irendi.com>
-function! <SID>GetNthExtensionFromSpec(extSpec, n) 
-   let extStart = 0
-   let extEnd = -1
+" History  : Renamed from GetNthExtensionFromSpec to GetNthItemFromList
+"            to reflect a more generic use of this function. -- Bindu
+function! <SID>GetNthItemFromList(list, n) 
+   let itemStart = 0
+   let itemEnd = -1
    let pos = 0
-   let ext = ""
+   let item = ""
    let i = 0
    while (i != a:n)
-      let extStart = extEnd + 1
-      let extEnd = match(a:extSpec, ",", extStart)
+      let itemStart = itemEnd + 1
+      let itemEnd = match(a:list, ",", itemStart)
       let i = i + 1
-      if (extEnd == -1)
+      if (itemEnd == -1)
          if (i == a:n)
-            let extEnd = strlen(a:extSpec)
+            let itemEnd = strlen(a:list)
          endif
          break
       endif
    endwhile 
-   if (extEnd != -1) 
-      let ext = strpart(a:extSpec, extStart, extEnd - extStart)
+   if (itemEnd != -1) 
+      let item = strpart(a:list, itemStart, itemEnd - itemStart)
    endif
-   return ext 
+   return item 
+endfunction
+
+" Function : ExpandAlternatePath (PRIVATE)
+" Purpose  : Expand path info.  A path with a prefix of "wdr:" will cause 
+"            be treated as relative to the working directory (i.e. the 
+"            directory where vim was started.) A path prefix of "abs:" will 
+"            be treated as absolute. No prefix or "sfr:" will result in the 
+"            path being treated as relative to the source file (see sfPath 
+"            argument).
+" Args     : pathSpec -- path component
+"            sfPath -- source file path
+" Returns  : a path that can be used by AlternateFile()
+" Author   : Bindu Wavell <bindu@wavell.net>
+function! <SID>ExpandAlternatePath(pathSpec, sfPath) 
+   let prfx = strpart(a:pathSpec, 0, 4)
+   if (prfx == "wdr:" || prfx == "abs:")
+      let path = strpart(a:pathSpec, 4)
+   else
+      let path   = a:pathSpec
+      if (prfx == "sfr:")
+         let path = strpart(path, 4)
+      endif
+      let path = a:sfPath . "/" . path
+   endif
+   return path
 endfunction
 
 " Function : AlternateFile (PUBLIC)
@@ -88,44 +140,74 @@ endfunction
 "            extension.
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
+" History  : When an alternate can't be found in the same directory as the
+"            source file, a search path will be traversed looking for the
+"            alternates.
 function! AlternateFile(splitWindow, ...)
-  let newFilename = ""
-  let baseName = expand("%<")
-  if (a:0 != 0)
-     let newFilename = baseName . "." . a:1
-  else
-     let currentFile = expand("%")
-     let extension = fnamemodify(currentFile,":e")
+  let baseName    = expand("%:t:r") " don't want path or ext
+  let extension   = expand("%:t:e")
+  let currentPath = expand("%:p:h")
+  let newFullname = ""
 
+  if (a:0 != 0)
+     let newFullname = baseName . "." . a:1
+  else
      let extSpec = ""
      silent! let extSpec = g:alternateExtensions_{extension}
      if (extSpec != "") 
-        let firstFilename = ""
+        let firstFullname = ""
         let foundMatch = 0
         let n = 1
         while (!foundMatch)
-           let ext = <SID>GetNthExtensionFromSpec(extSpec, n)
+           let ext = <SID>GetNthItemFromList(extSpec, n)
            if (ext != "") 
               let newFilename = baseName . "." . ext
-              let existsCheck = <SID>BufferOrFileExists(newFilename)
+              let newFullname = currentPath . "/" . newFilename
+              let existsCheck = <SID>BufferOrFileExists(newFullname)
+
               if (existsCheck == 1) 
                  let foundMatch = 1
-              elseif (n == 1)
-                 " save the first for posible later use
-                 let firstFilename = newFilename
+              else
+
+                 if (n == 1)
+                    " save the first for posible later use
+                    let firstFullname = newFullname
+                 endif
+
+                 " see if we can find the file in the search path
+                 let foundInPath = 0
+                 let m = 1
+                 let pathList = g:alternateSearchPath 
+                 let pathListLen = strlen(pathList)
+                 while (pathListLen > 0 && !foundInPath)
+                    let pathSpec = <SID>GetNthItemFromList(pathList, m) 
+                    if (pathSpec != "")
+                       let path = <SID>ExpandAlternatePath(pathSpec, currentPath)
+                       let newFullname = path . "/" . newFilename
+                       let existsCheck = <SID>BufferOrFileExists(newFullname)
+                       if (existsCheck == 1)
+                          let foundInPath = 1
+                          let foundMatch  = 1
+                       endif
+                    else
+                       break
+                    endif
+                    let m = m + 1
+                 endwhile
+
               endif
            else
               break
            endif
            let n = n + 1
         endwhile
-        if (foundMatch == 0 && firstFilename != "") 
-           let newFilename = firstFilename
+        if (foundMatch == 0 && firstFullname != "") 
+           let newFullname = firstFullname
         endif
      endif
   endif
-  if (newFilename != "")
-     call <SID>FindOrCreateBuffer(newFilename, a:splitWindow)
+  if (newFullname != "")
+     call <SID>FindOrCreateBuffer(newFullname, a:splitWindow)
   else
      echo "No alternate file available"
   endif
@@ -138,11 +220,14 @@ comm! -nargs=? AV call AlternateFile("v", <f-args>)
 
 " Function : BufferOrFileExists (PRIVATE)
 " Purpose  : determines if a buffer or a readable file exists
-" Args     : name (IN) - name of the buffer/file to check
+" Args     : fileName (IN) - name of the file to check
 " Returns  : TRUE if it exists, FALSE otherwise
 " Author   : Michael Sharpe <feline@irendi.com>
-function! <SID>BufferOrFileExists(name)
-   let result = bufexists(a:name) || filereadable(a:name)
+" History  : Updated code to handle buffernames using just the
+"            filename and not the path.
+function! <SID>BufferOrFileExists(fileName)
+   let bufName = fnamemodify(a:fileName,":t")
+   let result  = bufexists(bufName) || filereadable(a:fileName)
    return result
 endfunction
 
@@ -157,9 +242,17 @@ endfunction
 "                            ("v", "h", "") 
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
+" History  : bufname() was not working very well with the possibly strange
+"            paths that can abound with the search path so updated this
+"            slightly.  -- Bindu
+"            updated window switching code to make it more efficient -- Bindu
 function! <SID>FindOrCreateBuffer(filename, doSplit)
   " Check to see if the buffer is already open before re-opening it.
   let bufName = bufname(a:filename)
+  if (bufName == "")
+     let bufFilename = fnamemodify(a:filename,":t")
+     let bufName = bufname(bufFilename)
+  endif
   if (bufName == "")
      " Buffer did not exist....create it
      if (a:doSplit == "h")
@@ -171,35 +264,28 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
      endif
   else
      " Buffer was already open......check to see if it is in a window
-     let bufWindow = bufwinnr(a:filename)
+     let bufWindow = bufwinnr(bufName)
      if (bufWindow == -1) 
+        " Buffer was not in a window so open one
         if (a:doSplit == "h")
-           execute ":sbuffer " . a:filename
+           execute ":sbuffer " . bufName
         elseif (a:doSplit == "v")
-           execute ":vert sbuffer " . a:filename
+           execute ":vert sbuffer " . bufName
         else
-           execute ":buffer " . a:filename
+           execute ":buffer " . bufName
         endif
      else
-        " search the windows for the target window
-        if bufWindow != winnr()
-           " only search if the current window does not contain the buffer
-	   execute "normal \<C-W>b"
-	   let winNum = winnr()
-	   while (winNum != bufWindow && winNum > 0)
-	      execute "normal \<C-W>k"
-	      let winNum = winNum - 1
-	   endwhile
-	   if (0 == winNum) 
-	      " something wierd happened...open the buffer
-              if (a:doSplit == "h")
-		 execute ":split " . a:filename
-              elseif (a:doSplit == "v")
-		 execute ":vsplit " . a:filename
-	      else
-		 execute ":e " . a:filename
-	      endif
-	   endif
+        " Buffer is already in a window so switch to the window
+        execute bufWindow."wincmd w"
+        if (bufWindow != winnr()) 
+           " something wierd happened...open the buffer
+           if (a:doSplit == "h")
+              execute ":split " . bufName
+           elseif (a:doSplit == "v")
+              execute ":vsplit " . bufName
+           else
+              execute ":e " . bufName
+           endif
         endif
      endif
   endif
