@@ -31,19 +31,19 @@ func! AlternateFile(splitWindow, ...)
      let extension = fnamemodify(currentFile,":e")
      if (extension == "c")
         let newFilename = baseName.".h"
-     elseif (extension == "cpp")
+     elseif (extension == "cpp" || extension == "CPP")
         let newFilename = baseName . ".h"
-     elseif (extension == "cc")
+     elseif (extension == "cc" || extension == "CC")
         let newFilename = baseName . ".h"
      elseif (extension == "C")
         let newFilename = baseName . ".h"
-     elseif (extension == "cxx")
+     elseif (extension == "cxx" || extension == "CXX")
         let newFilename = baseName . ".h"
      elseif (extension == "psl")
         let newFilename = baseName . ".ph"
      elseif (extension == "ph")
         let newFilename = baseName . ".psl"
-     elseif (extension == "h")
+     elseif (extension == "h" || extension == "H")
         " check to see if a .c file exists
         let newFilename = baseName . ".c"
         let existsCheck = BufferOrFileExists(newFilename)
