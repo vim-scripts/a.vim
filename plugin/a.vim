@@ -14,9 +14,9 @@
 
 " TODO: a) :AN command "next alternate"
 "       b) Priorities for search paths
-"       c) Error instead of defaulting when alternate does not exist
-"       d) <leader>A on a #include line should go to that header
+"       c) <leader>A on a #include line should go to that header
 
+" Do not load a.vim if is has already been loaded.
 if exists("loaded_alternateFile")
     finish
 endif
@@ -27,6 +27,7 @@ let loaded_alternateFile = 1
 " g:alternateExtensions_<EXT> variable to a comma separated list of alternates,
 " where <EXT> is the extension to map.
 " E.g. let g:alternateExtensions_CPP = "inc,h,H,HPP,hpp"
+"      let g:alternateExtensions_{'aspx.cs'} = "aspx"
 
 
 " Function : AddAlternateExtensionMapping (PRIVATE)
@@ -37,8 +38,17 @@ let loaded_alternateFile = 1
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
 function! <SID>AddAlternateExtensionMapping(extension, alternates)
-   let varName = "g:alternateExtensions_" . a:extension
-   if (!exists(varName))
+   " This code does not actually work for variables like foo{'a.b.c.d.e'}
+   "let varName = "g:alternateExtensions_" . a:extension
+   "if (!exists(varName))
+   "   let g:alternateExtensions_{a:extension} = a:alternates
+   "endif
+
+   " This code handles extensions which contains a dot. exists() fails with
+   " such names.
+   let v:errmsg = ""
+   silent! echo g:alternateExtensions_{extension}
+   if (v:errmsg != "")
       let g:alternateExtensions_{a:extension} = a:alternates
    endif
 endfunction
@@ -73,8 +83,16 @@ call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
 
 " Setup default search path, unless the user has specified
 " a path in their [._]vimrc. 
-if !exists('g:alternateSearchPath')
+if (!exists('g:alternateSearchPath'))
   let g:alternateSearchPath = 'sfr:../source,sfr:../src,sfr:../include,sfr:../inc'
+endif
+
+" If this variable is true then a.vim will not alternate to a file/buffer which
+" does not exist. E.g while editing a.c and the :A will not swtich to a.h
+" unless it exists.
+if (!exists('g:alternateNoDefaultAlternate'))
+   " by default a.vim will alternate to a file which does not exist
+   let g:alternateNoDefaultAlternate = 1
 endif
 
 " Function : GetNthItemFromList (PRIVATE)
@@ -300,23 +318,23 @@ endfunction
 "            variables echo the curly brace variable and look for an error 
 "            message.
 function! DetermineExtension(path) 
-  let extension = expand("%:t:e")
+  let extension = fnamemodify(a:path,":t:e")
   let v:errmsg = ""
   silent! echo g:alternateExtensions_{extension}
   if (v:errmsg != "")
-     let extension = expand("%:t:e:e")
+     let extension = fnamemodify(a:path,":t:e:e")
      let v:errmsg = ""
      silent! echo g:alternateExtensions_{extension}
      if (v:errmsg != "")
-        let extension = expand("%:t:e:e:e")
+        let extension = fnamemodify(a:path,":t:e:e:e")
         let v:errmsg = ""
         silent! echo g:alternateExtensions_{extension}
         if (v:errmsg != "")
-           let extension = expand("%:t:e:e:e:e")
+           let extension = fnamemodify(a:path,":t:e:e:e:e")
            let v:errmsg = ""
            silent! echo g:alternateExtensions_{extension}
            if (v:errmsg != "")
-              let extension = expand("%:t:e:e:e:e:e")
+              let extension = fnamemodify(a:path,":t:e:e:e:e:e")
               let v:errmsg = ""
               silent! echo g:alternateExtensions_{extension}
               if (v:errmsg != "")
@@ -385,9 +403,13 @@ function! AlternateFile(splitWindow, ...)
            let onefile = <SID>GetNthItemFromList(allfiles, n)
         endwhile
 
-        call <SID>FindOrCreateBuffer(bestFile, a:splitWindow)
+        if (bestScore == 0 && g:alternateNoDefaultAlternate == 1)
+           echo "No existing alternate available"
+        else
+           call <SID>FindOrCreateBuffer(bestFile, a:splitWindow)
+        endif
      else
-        echo "No alternate file available"
+        echo "No alternate file/buffer available"
      endif
    endif
 endfunction
