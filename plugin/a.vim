@@ -1,4 +1,4 @@
-" Copyright (c) 1998-2002
+" Copyright (c) 1998-2004
 " Michael Sharpe <feline@irendi.com>
 "
 " We grant permission to use, copy modify, distribute, and sell this
@@ -15,6 +15,8 @@ if exists("loaded_alternateFile")
     finish
 endif
 let loaded_alternateFile = 1
+
+source $HOME/vimscripts/plugin/Decho.vim
 
 " setup the default set of alternate extensions. The user can override in thier
 " .vimrc if the defaults are not suitable. To override in a .vimrc simply set a
@@ -122,13 +124,45 @@ function! <SID>ExpandAlternatePath(pathSpec, sfPath)
    if (prfx == "wdr:" || prfx == "abs:")
       let path = strpart(a:pathSpec, 4)
    else
-      let path   = a:pathSpec
+      let path = a:pathSpec
       if (prfx == "sfr:")
          let path = strpart(path, 4)
       endif
       let path = a:sfPath . "/" . path
    endif
    return path
+endfunction
+
+" Function : FindFileInSearchPath (PRIVATE)
+" Purpose  : Searches for a file in the search path list
+" Args     : filename -- name of the file to search for
+"            pathList -- the path list to search
+"            relPathBase -- the path which relative paths are expanded from
+" Returns  : An expanded filename if found, the empty string otherwise
+" Author   : Michael Sharpe (feline@irendi.com)
+" History  : inline code written by Bindu Wavell originally
+function! <SID>FindFileInSearchPath(filename, pathList, relPathBase)
+   let filepath = ""
+   let m = 1
+   let pathListLen = strlen(a:pathList)
+   if (pathListLen > 0)
+      while (1)
+         let pathSpec = <SID>GetNthItemFromList(a:pathList, m) 
+         if (pathSpec != "")
+            let path = <SID>ExpandAlternatePath(pathSpec, a:relPathBase)
+            let fullname = path . "/" . a:filename
+            let foundMatch = <SID>BufferOrFileExists(fullname)
+            if (foundMatch)
+               let filepath = fullname
+               break
+            endif
+         else
+            break
+         endif
+         let m = m + 1
+      endwhile
+   endif
+   return filepath
 endfunction
 
 " Function : AlternateFile (PUBLIC)
@@ -138,9 +172,10 @@ endfunction
 "            extension.
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
-" History  : When an alternate can't be found in the same directory as the
-"            source file, a search path will be traversed looking for the
-"            alternates.
+" History  : + When an alternate can't be found in the same directory as the
+"              source file, a search path will be traversed looking for the
+"              alternates.
+"            + Moved some code into a separate function, minor optimization
 function! AlternateFile(splitWindow, ...)
   let baseName    = expand("%:t:r") " don't want path or ext
   let extension   = expand("%:t:e")
@@ -161,38 +196,18 @@ function! AlternateFile(splitWindow, ...)
            if (ext != "") 
               let newFilename = baseName . "." . ext
               let newFullname = currentPath . "/" . newFilename
-              let existsCheck = <SID>BufferOrFileExists(newFullname)
-
-              if (existsCheck == 1) 
-                 let foundMatch = 1
-              else
-
+              let foundMatch = <SID>BufferOrFileExists(newFullname)
+              if (!foundMatch) 
                  if (n == 1)
                     " save the first for posible later use
                     let firstFullname = newFullname
                  endif
 
                  " see if we can find the file in the search path
-                 let foundInPath = 0
-                 let m = 1
-                 let pathList = g:alternateSearchPath 
-                 let pathListLen = strlen(pathList)
-                 while (pathListLen > 0 && !foundInPath)
-                    let pathSpec = <SID>GetNthItemFromList(pathList, m) 
-                    if (pathSpec != "")
-                       let path = <SID>ExpandAlternatePath(pathSpec, currentPath)
-                       let newFullname = path . "/" . newFilename
-                       let existsCheck = <SID>BufferOrFileExists(newFullname)
-                       if (existsCheck == 1)
-                          let foundInPath = 1
-                          let foundMatch  = 1
-                       endif
-                    else
-                       break
-                    endif
-                    let m = m + 1
-                 endwhile
-
+                 let newFullname = <SID>FindFileInSearchPath(newFilename, g:alternateSearchPath, currentPath)
+                 if (newFullname != "")
+                    let foundMatch = 1
+                 endif
               endif
            else
               break
@@ -211,6 +226,7 @@ function! AlternateFile(splitWindow, ...)
   endif
 endfunction
 
+
 comm! -nargs=? -bang A call AlternateFile("n<bang>", <f-args>)
 comm! -nargs=? -bang AS call AlternateFile("h<bang>", <f-args>)
 comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
@@ -225,7 +241,7 @@ comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
 "            filename and not the path.
 function! <SID>BufferOrFileExists(fileName)
    let bufName = fnamemodify(a:fileName,":t")
-   let result  = bufexists(bufName) || filereadable(a:fileName)
+   let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
    return result
 endfunction
 
@@ -240,18 +256,27 @@ endfunction
 "                            ("v", "h", "n", "v!", "h!", "n!") 
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
-" History  : bufname() was not working very well with the possibly strange
+" History  : + bufname() was not working very well with the possibly strange
 "            paths that can abound with the search path so updated this
 "            slightly.  -- Bindu
-"            updated window switching code to make it more efficient -- Bindu
+"            + updated window switching code to make it more efficient -- Bindu
 "            Allow ! to be applied to buffer/split/editing commands for more
 "            vim/vi like consistency
+"            + implemented fix from Matt Perry
 function! <SID>FindOrCreateBuffer(filename, doSplit)
   " Check to see if the buffer is already open before re-opening it.
   let bufName = bufname(a:filename)
+  let bufFilename = fnamemodify(a:filename,":t")
+
   if (bufName == "")
-     let bufFilename = fnamemodify(a:filename,":t")
      let bufName = bufname(bufFilename)
+  endif
+
+  if (bufName != "")
+     let tail = fnamemodify(bufName, ":t")
+     if (tail != bufFilename)
+        let bufName = ""
+     endif
   endif
 
   let splitType = a:doSplit[0]
