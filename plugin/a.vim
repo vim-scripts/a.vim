@@ -131,6 +131,7 @@ func! AlternateFile(splitWindow, ...)
 endfunc
 comm! -nargs=? A call AlternateFile(0, <f-args>)
 comm! -nargs=? AS call AlternateFile(1, <f-args>)
+comm! -nargs=? AV call AlternateFile(2, <f-args>)
 
 
 " Function : BufferOrFileExists (PRIVATE)
@@ -154,43 +155,49 @@ endfunction
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
 function! <SID>FindOrCreateBuffer(filename, doSplit)
-  " Check to see if the buffer is already open before re-opening it.
-  let bufName = bufname(a:filename)
-  if (bufName == "")
-     " Buffer did not exist....create it
-     if (a:doSplit != 0)
-        execute ":split " . a:filename
-     else
-        execute ":e " . a:filename
-     endif
-  else
-     " Buffer was already open......check to see if it is in a window
-     let bufWindow = bufwinnr(a:filename)
-     if (bufWindow == -1) 
-        if (a:doSplit != 0)
-           execute ":sbuffer " . a:filename
-        else
-           execute ":buffer " . a:filename
-        endif
-     else
-        " search the windows for the target window
-        if bufWindow != winnr()
-           " only search if the current window does not contain the buffer
-	   execute "normal \<C-W>b"
-	   let winNum = winnr()
-	   while (winNum != bufWindow && winNum > 0)
-	      execute "normal \<C-W>k"
-	      let winNum = winNum - 1
-	   endwhile
-	   if (0 == winNum) 
-	      " something wierd happened...open the buffer
-	      if (a:doSplit != 0)
-		 execute ":split " . a:filename
-	      else
-		 execute ":e " . a:filename
-	      endif
-	   endif
-        endif
-     endif
-  endif
+   " Check to see if the buffer is already open before re-opening it.
+   let bufName = bufname(a:filename)
+   if (bufName == "")
+      " Buffer did not exist....create it
+      if (a:doSplit == 2)
+         execute ":vert split " . a:filename
+      elseif (a:doSplit == 1)
+         execute ":split " . a:filename
+      else
+         execute ":e " . a:filename
+      endif
+   else
+      " Buffer was already open......check to see if it is in a window
+      let bufWindow = bufwinnr(a:filename)
+      if (bufWindow == -1) 
+         if (a:doSplit == 2)
+            execute ":vert sbuffer " . a:filename
+         elseif (a:doSplit == 1)
+            execute ":sbuffer " . a:filename
+         else
+            execute ":buffer " . a:filename
+         endif
+      else
+         " search the windows for the target window
+         if bufWindow != winnr()
+            " only search if the current window does not contain the buffer
+            execute "normal \<C-W>b"
+            let winNum = winnr()
+            while (winNum != bufWindow && winNum > 0)
+               execute "normal \<C-W>k"
+               let winNum = winNum - 1
+            endwhile
+            if (0 == winNum) 
+               " something wierd happened...open the buffer
+               if (a:doSplit == 2)
+                  execute ":vert split " . a:filename
+               elseif (a:doSplit == 1)
+                  execute ":split " . a:filename
+               else
+                  execute ":e " . a:filename
+               endif
+            endif
+         endif
+      endif
+   endif
 endfunction
