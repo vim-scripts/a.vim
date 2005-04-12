@@ -80,6 +80,10 @@ call <SID>AddAlternateExtensionMapping('lpp',"ypp,y,yacc")
 call <SID>AddAlternateExtensionMapping('y',"l,lex,lpp")
 call <SID>AddAlternateExtensionMapping('yacc',"lex,l,lpp")
 call <SID>AddAlternateExtensionMapping('ypp',"lpp,l,lex")
+" Mappings for OCaml
+call <SID>AddAlternateExtensionMapping('ml',"mli")
+call <SID>AddAlternateExtensionMapping('mli',"ml")
+
 "let g:alternateExtensions_{'aspx.cs'} = "aspx"
 "let g:alternateExtensions_{'aspx'} = "aspx.cs"
 
