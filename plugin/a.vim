@@ -1,4 +1,4 @@
-" Copyright (c) 1998-2004
+" Copyright (c) 1998-2006
 " Michael Sharpe <feline@irendi.com>
 "
 " We grant permission to use, copy modify, distribute, and sell this
@@ -30,6 +30,10 @@ let loaded_alternateFile = 1
 "      let g:alternateExtensions_{'aspx.cs'} = "aspx"
 
 
+" This variable will be increased when an extension with greater number of dots
+" is added by the AddAlternateExtensionMapping call.
+let s:maxDotsInExtension = 0
+
 " Function : AddAlternateExtensionMapping (PRIVATE)
 " Purpose  : simple helper function to add the default alternate extension
 "            mappings.
@@ -50,6 +54,11 @@ function! <SID>AddAlternateExtensionMapping(extension, alternates)
    silent! echo g:alternateExtensions_{a:extension}
    if (v:errmsg != "")
       let g:alternateExtensions_{a:extension} = a:alternates
+   endif
+
+   let dotsNumber = strlen(substitute(a:extension, "[^.]", "", "g"))
+   if s:maxDotsInExtension < dotsNumber
+     let s:maxDotsInExtension = dotsNumber
    endif
 endfunction
 
@@ -204,7 +213,7 @@ endfunction
 " Returns  : An expanded filename if found, the empty string otherwise
 " Author   : Michael Sharpe (feline@irendi.com)
 " History  : inline code written by Bindu Wavell originally
-function! <SID>FindFileInSearchPath(filename, pathList, relPathBase)
+function! <SID>FindFileInSearchPath(fileName, pathList, relPathBase)
    let filepath = ""
    let m = 1
    let pathListLen = strlen(a:pathList)
@@ -213,7 +222,7 @@ function! <SID>FindFileInSearchPath(filename, pathList, relPathBase)
          let pathSpec = <SID>GetNthItemFromList(a:pathList, m) 
          if (pathSpec != "")
             let path = <SID>ExpandAlternatePath(pathSpec, a:relPathBase)
-            let fullname = path . "/" . a:filename
+            let fullname = path . "/" . a:fileName
             let foundMatch = <SID>BufferOrFileExists(fullname)
             if (foundMatch)
                let filepath = fullname
@@ -324,36 +333,20 @@ endfunction
 "            variables echo the curly brace variable and look for an error 
 "            message.
 function! DetermineExtension(path) 
-  let extension = fnamemodify(a:path,":t:e")
-  let v:errmsg = ""
-  silent! echo g:alternateExtensions_{extension}
-  if (v:errmsg != "")
-     let extension = fnamemodify(a:path,":t:e:e")
-     let v:errmsg = ""
-     silent! echo g:alternateExtensions_{extension}
-     if (v:errmsg != "")
-        let extension = fnamemodify(a:path,":t:e:e:e")
-        let v:errmsg = ""
-        silent! echo g:alternateExtensions_{extension}
-        if (v:errmsg != "")
-           let extension = fnamemodify(a:path,":t:e:e:e:e")
-           let v:errmsg = ""
-           silent! echo g:alternateExtensions_{extension}
-           if (v:errmsg != "")
-              let extension = fnamemodify(a:path,":t:e:e:e:e:e")
-              let v:errmsg = ""
-              silent! echo g:alternateExtensions_{extension}
-              if (v:errmsg != "")
-                 let extension = ""
-              endif
-           endif
-        endif
-     endif
-  endif 
-  return extension
+  let mods = ":t"
+  let i = 0
+  while i <= s:maxDotsInExtension
+    let mods = mods . ":e"
+    let extension = fnamemodify(a:path, mods)
+    let v:errmsg = ""
+    silent! echo g:alternateExtensions_{extension}
+    if (v:errmsg == "")
+      return extension
+    endif
+    let i = i + 1
+  endwhile
+  return ""
 endfunction
-
-"source $HOME/vimscripts/plugin/Decho.vim
 
 " Function : AlternateFile (PUBLIC)
 " Purpose  : Opens a new buffer by looking at the extension of the current
@@ -373,10 +366,6 @@ function! AlternateFile(splitWindow, ...)
   let baseName    = substitute(expand("%:t"), "\." . extension . '$', "", "")
   let currentPath = expand("%:p:h")
 
-"Decho "extension=".extension
-"Decho "baseName=".baseName
-"Decho "currentPath=".currentPath
-
   if (a:0 != 0)
      let newFullname = currentPath . "/" .  baseName . "." . a:1
      call <SID>FindOrCreateBuffer(newFullname, a:splitWindow)
@@ -385,9 +374,6 @@ function! AlternateFile(splitWindow, ...)
      if (extension != "")
         let allfiles1 = EnumerateFilesByExtension(currentPath, baseName, extension)
         let allfiles2 = EnumerateFilesByExtensionInPath(baseName, extension, g:alternateSearchPath, currentPath)
-
-"Decho "allfiles1=".allfiles1
-"Decho "allfiles2=".allfiles2
 
         if (allfiles1 != "")
            if (allfiles2 != "")
@@ -432,6 +418,9 @@ endfunction
 comm! -nargs=? -bang A call AlternateFile("n<bang>", <f-args>)
 comm! -nargs=? -bang AS call AlternateFile("h<bang>", <f-args>)
 comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
+if v:version >= 700
+comm! -nargs=? -bang AT call AlternateFile("t<bang>", <f-args>)
+endif
 
 " Function : BufferOrFileExists (PRIVATE)
 " Purpose  : determines if a buffer or a readable file exists
@@ -442,17 +431,34 @@ comm! -nargs=? -bang AV call AlternateFile("v<bang>", <f-args>)
 "            filename and not the path.
 function! <SID>BufferOrFileExists(fileName)
    let result = 0
-   let bufName = fnamemodify(a:fileName,":t")
-   let memBufName = bufname(bufName)
-   if (memBufName != "")
-      let memBufBasename = fnamemodify(memBufName, ":t")
-      if (bufName == memBufBasename)
-         let result = 2
+
+   let lastBuffer = bufnr("$")
+   let i = 1
+   while i <= lastBuffer
+     if <SID>EqualFilePaths(expand("#".i.":p"), a:fileName)
+       let result = 2
+       break
+     endif
+     let i = i + 1
+   endwhile
+
+   if (!result) 
+      let bufName = fnamemodify(a:fileName,":t")
+      let memBufName = bufname(bufName)
+      if (memBufName != "")
+         let memBufBasename = fnamemodify(memBufName, ":t")
+         if (bufName == memBufBasename)
+            let result = 2
+         endif
+      endif
+
+      if (!result)
+         let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
       endif
    endif
 
    if (!result)
-      let result  = bufexists(bufName) || bufexists(a:fileName) || filereadable(a:fileName)
+      let result = filereadable(a:fileName)
    endif
    return result
 endfunction
@@ -465,7 +471,7 @@ endfunction
 "            not exist, it creates it.
 " Args     : filename (IN) -- the name of the file
 "            doSplit (IN) -- indicates whether the window should be split
-"                            ("v", "h", "n", "v!", "h!", "n!") 
+"                            ("v", "h", "n", "v!", "h!", "n!", "t", "t!") 
 " Returns  : nothing
 " Author   : Michael Sharpe <feline@irendi.com>
 " History  : + bufname() was not working very well with the possibly strange
@@ -475,49 +481,98 @@ endfunction
 "            Allow ! to be applied to buffer/split/editing commands for more
 "            vim/vi like consistency
 "            + implemented fix from Matt Perry
-function! <SID>FindOrCreateBuffer(filename, doSplit)
+function! <SID>FindOrCreateBuffer(fileName, doSplit)
   " Check to see if the buffer is already open before re-opening it.
-  let bufName = bufname(a:filename)
-  let bufFilename = fnamemodify(a:filename,":t")
+  let FILENAME = a:fileName
+  let bufNr = -1
+  let lastBuffer = bufnr("$")
+  let i = 1
+  while i <= lastBuffer
+    if <SID>EqualFilePaths(expand("#".i.":p"), a:fileName)
+      let bufNr = i
+      break
+    endif
+    let i = i + 1
+  endwhile
 
-  if (bufName == "")
-     let bufName = bufname(bufFilename)
-  endif
+  if (bufNr == -1)
+     let bufName = bufname(a:fileName)
+     let bufFilename = fnamemodify(a:fileName,":t")
 
-  if (bufName != "")
-     let tail = fnamemodify(bufName, ":t")
-     if (tail != bufFilename)
-        let bufName = ""
+     if (bufName == "")
+        let bufName = bufname(bufFilename)
+     endif
+
+     if (bufName != "")
+        let tail = fnamemodify(bufName, ":t")
+        if (tail != bufFilename)
+           let bufName = ""
+        endif
+     endif
+     if (bufName != "")
+        let bufNr = bufnr(bufName)
+        let FILENAME = bufName
      endif
   endif
 
   let splitType = a:doSplit[0]
   let bang = a:doSplit[1]
-  if (bufName == "")
+  if (bufNr == -1)
      " Buffer did not exist....create it
      let v:errmsg=""
      if (splitType == "h")
-        silent! execute ":split".bang." " . a:filename
+        silent! execute ":split".bang." " . FILENAME
      elseif (splitType == "v")
-        silent! execute ":vsplit".bang." " . a:filename
+        silent! execute ":vsplit".bang." " . FILENAME
+     elseif (splitType == "t")
+        silent! execute ":tab split".bang." " . FILENAME
      else
-        silent! execute ":e".bang." " . a:filename
+        silent! execute ":e".bang." " . FILENAME
      endif
      if (v:errmsg != "")
         echo v:errmsg
      endif
   else
+
+     " Find the correct tab corresponding to the existing buffer
+     let tabNr = -1
+     " iterate tab pages
+     for i in range(tabpagenr('$'))
+        " get the list of buffers in the tab
+        let tabList =  tabpagebuflist(i + 1)
+        let idx = 0
+        " iterate each buffer in the list
+        while idx < len(tabList)
+           " if it matches the buffer we are looking for...
+           if (tabList[idx] == bufNr)
+              " ... save the number
+              let tabNr = i + 1
+              break
+           endif
+           let idx = idx + 1
+        endwhile
+        if (tabNr != -1)
+           break
+        endif
+     endfor
+     " switch the the tab containing the buffer
+     if (tabNr != -1)
+        execute "tabn ".tabNr
+     endif
+
      " Buffer was already open......check to see if it is in a window
-     let bufWindow = bufwinnr(bufName)
+     let bufWindow = bufwinnr(bufNr)
      if (bufWindow == -1) 
         " Buffer was not in a window so open one
         let v:errmsg=""
         if (splitType == "h")
-           silent! execute ":sbuffer".bang." " . bufName
+           silent! execute ":sbuffer".bang." " . FILENAME
         elseif (splitType == "v")
-           silent! execute ":vert sbuffer " . bufName
+           silent! execute ":vert sbuffer " . FILENAME
+        elseif (splitType == "t")
+           silent! execute ":tab sbuffer " . FILENAME
         else
-           silent! execute ":buffer".bang." " . bufName
+           silent! execute ":buffer".bang." " . FILENAME
         endif
         if (v:errmsg != "")
            echo v:errmsg
@@ -529,16 +584,36 @@ function! <SID>FindOrCreateBuffer(filename, doSplit)
            " something wierd happened...open the buffer
            let v:errmsg=""
            if (splitType == "h")
-              silent! execute ":split".bang." " . bufName
+              silent! execute ":split".bang." " . FILENAME
            elseif (splitType == "v")
-              silent! execute ":vsplit".bang." " . bufName
+              silent! execute ":vsplit".bang." " . FILENAME
+           elseif (splitType == "t")
+              silent! execute ":tab split".bang." " . FILENAME
            else
-              silent! execute ":e".bang." " . bufName
+              silent! execute ":e".bang." " . FILENAME
            endif
            if (v:errmsg != "")
               echo v:errmsg
            endif
         endif
      endif
+  endif
+endfunction
+
+" Function : EqualFilePaths (PRIVATE)
+" Purpose  : Compares two paths. Do simple string comparison anywhere but on
+"            Windows. On Windows take into account that file paths could differ
+"            in usage of separators and the fact that case does not metter.
+"            "c:\WINDOWS" is the same path as "c:/windows". has("win32unix") Vim
+"            version does not count as one having Windows path rules.
+" Args     : path1 (IN) -- first path
+"            path2 (IN) -- second path
+" Returns  : 1 if path1 is equal to path2, 0 otherwise.
+" Author   : Ilya Bobir <ilya@po4ta.com>
+function! <SID>EqualFilePaths(path1, path2)
+  if has("win16") || has("win32") || has("win64") || has("win95")
+    return substitute(a:path1, "\/", "\\", "g") ==? substitute(a:path2, "\/", "\\", "g")
+  else
+    return a:path1 == a:path2
   endif
 endfunction
