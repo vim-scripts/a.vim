@@ -11,6 +11,9 @@
 
 " Directory & regex enhancements added by Bindu Wavell who is well known on
 " vim.sf.net
+"
+" Patch for spaces in files/directories from Nathan Stien (also reported by
+" Soeren Sonnenburg)
 
 " Do not load a.vim if is has already been loaded.
 if exists("loaded_alternateFile")
@@ -685,7 +688,7 @@ endfunction
 "            + implemented fix from Matt Perry
 function! <SID>FindOrCreateBuffer(fileName, doSplit, findSimilar)
   " Check to see if the buffer is already open before re-opening it.
-  let FILENAME = a:fileName
+  let FILENAME = escape(a:fileName, ' ')
   let bufNr = -1
   let lastBuffer = bufnr("$")
   let i = 1
