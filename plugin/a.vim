@@ -118,6 +118,16 @@ if (!exists('g:alternateNoDefaultAlternate'))
    let g:alternateNoDefaultAlternate = 0
 endif
 
+" If this variable is true then a.vim will convert the alternate filename to a
+" filename relative to the current working directory.
+" Feature by Nathan Huizinga
+if (!exists('g:alternateRelativeFiles'))                                        
+   " by default a.vim will not convert the filename to one relative to the
+   " current working directory
+   let g:alternateRelativeFiles = 0
+endif
+
+
 " Function : GetNthItemFromList (PRIVATE)
 " Purpose  : Support reading items from a comma seperated list
 "            Used to iterate all the extensions in an extension spec
@@ -296,14 +306,14 @@ endfunction
 function! EnumerateFilesByExtension(path, baseName, extension)
    let enumeration = ""
    let extSpec = ""
-   if (has_key(g:alternateExtensionsDict, a:extension))
-      let extSpec = g:alternateExtensionsDict[a:extension]
+   let v:errmsg = ""
+   silent! echo g:alternateExtensions_{a:extension}
+   if (v:errmsg == "")
+      let extSpec = g:alternateExtensions_{a:extension}
    endif
    if (extSpec == "")
-      let v:errmsg = ""
-      silent! echo g:alternateExtensions_{a:extension}
-      if (v:errmsg == "")
-         let extSpec = g:alternateExtensions_{a:extension}
+      if (has_key(g:alternateExtensionsDict, a:extension))
+         let extSpec = g:alternateExtensionsDict[a:extension]
       endif
    endif
    if (extSpec != "") 
@@ -720,6 +730,10 @@ function! <SID>FindOrCreateBuffer(fileName, doSplit, findSimilar)
            let FILENAME = bufName
         endif
      endif
+  endif
+
+  if (g:alternateRelativeFiles == 1)                                            
+        let FILENAME = fnamemodify(FILENAME, ":p:.")
   endif
 
   let splitType = a:doSplit[0]
