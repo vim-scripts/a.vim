@@ -127,6 +127,14 @@ if (!exists('g:alternateRelativeFiles'))
    let g:alternateRelativeFiles = 0
 endif
 
+" If this variable is true then a.vim always open the alternative
+" file in the current window
+" Feature by Andres Llopis
+if (!exists('g:alternateSwitchOnCurrentWindowAlways'))                                        
+   " by default a.vim will not convert the filename to one relative to the
+   " current working directory
+   let g:alternateSwitchOnCurrentWindowAlways = 0
+endif
 
 " Function : GetNthItemFromList (PRIVATE)
 " Purpose  : Support reading items from a comma seperated list
@@ -782,7 +790,12 @@ function! <SID>FindOrCreateBuffer(fileName, doSplit, findSimilar)
      endif
 
      " Buffer was already open......check to see if it is in a window
-     let bufWindow = bufwinnr(bufNr)
+     if (g:alternateSwitchOnCurrentWindowAlways == 1)
+       let bufWindow = -1
+     else
+      let bufWindow = bufwinnr(bufNr)
+     endif
+
      if (bufWindow == -1) 
         " Buffer was not in a window so open one
         let v:errmsg=""
